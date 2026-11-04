@@ -2,6 +2,9 @@
 // Variables de entorno (usa UNA de las dos):
 //   GEMINI_API_KEY     -> IA de Google con nivel gratuito (recomendado para pruebas)
 //   ANTHROPIC_API_KEY  -> IA de Anthropic (de pago por uso)
+//
+// Para diagnosticar: abre en el navegador  /api/preguntar?pregunta=hola
+// Si algo falla, el campo "detalle" dice el motivo.
 
 function construirPrompt(medicamento, pregunta) {
   return [
@@ -39,10 +42,15 @@ async function conGemini(prompt, key) {
       })
     }
   );
-  if (!r.ok) throw new Error("gemini " + r.status);
+  if (!r.ok) {
+    const detalle = (await r.text()).slice(0, 400);
+    throw new Error("Gemini respondió " + r.status + ": " + detalle);
+  }
   const data = await r.json();
   const partes = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-  return partes.map(function (p) { return p.text || ""; }).join("");
+  const texto = partes.map(function (p) { return p.text || ""; }).join("");
+  if (!texto) throw new Error("Gemini no devolvió texto: " + JSON.stringify(data).slice(0, 400));
+  return texto;
 }
 
 async function conAnthropic(prompt, key) {
@@ -55,24 +63,42 @@ async function conAnthropic(prompt, key) {
       messages: [{ role: "user", content: prompt }]
     })
   });
-  if (!r.ok) throw new Error("anthropic " + r.status);
+  if (!r.ok) {
+    const detalle = (await r.text()).slice(0, 400);
+    throw new Error("Anthropic respondió " + r.status + ": " + detalle);
+  }
   const data = await r.json();
   return (data.content && data.content[0] && data.content[0].text) || "";
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "POST") {
+  if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Método no permitido" });
     return;
   }
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  // Un GET sin pregunta mantiene el mensaje de comprobación de que la función está subida.
+  if (req.method === "GET" && !(req.query && req.query.pregunta)) {
+    res.status(405).json({ error: "Método no permitido" });
+    return;
+  }
+
+  const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+  const anthropicKey = (process.env.ANTHROPIC_API_KEY || "").trim();
   if (!geminiKey && !anthropicKey) {
     res.status(500).json({ error: "Falta GEMINI_API_KEY o ANTHROPIC_API_KEY en el servidor" });
     return;
   }
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+  let body;
+  if (req.method === "GET") {
+    body = req.query || {};
+  } else {
+    try {
+      body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    } catch (e) {
+      body = {};
+    }
+  }
   const pregunta = String(body.pregunta || "").trim().slice(0, 300);
   const medicamento = String(body.medicamento || "").trim().slice(0, 60) || "no indicado";
   if (!pregunta) {
@@ -92,6 +118,7 @@ module.exports = async function handler(req, res) {
     }
     res.status(200).json(salida);
   } catch (e) {
-    res.status(502).json({ error: "La IA no ha respondido" });
+    console.error(e);
+    res.status(502).json({ error: "La IA no ha respondido", detalle: String((e && e.message) || e) });
   }
 };
