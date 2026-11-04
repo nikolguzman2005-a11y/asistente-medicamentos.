@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asistente de medicamentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f6f3; --surface: #ffffff; --fg: #13211c; --muted: #4d5f58; --line: #cdd8d2;
+  --accent: #0b6a4d; --accent-fg: #ffffff; --accent-soft: #dcefe6; --alert: #a63a0a; --alert-soft: #fbe6da;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-data: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0e1613; --surface: #17231e; --fg: #eaf2ee; --muted: #a3b5ad; --line: #2c3e36;
+    --accent: #4fc79b; --accent-fg: #06251a; --accent-soft: #1b3a2f; --alert: #ff9b6b; --alert-soft: #3b2214;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 18px; line-height: 1.5;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 40rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.label {
+  background: var(--surface); border: 2px solid var(--fg); border-radius: 4px; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px;
+}
+.label .k { font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.label .v { font-size: 1.5rem; font-weight: 700; overflow-wrap: anywhere; }
+button, .btn {
+  font: inherit; font-weight: 700; cursor: pointer; border-radius: 4px; min-height: 52px; padding: 10px 18px;
+  border: 2px solid var(--fg); background: var(--surface); color: var(--fg);
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none;
+}
+button:hover, .btn:hover { background: var(--accent-soft); }
+button[disabled] { opacity: 0.55; cursor: not-allowed; }
+.talk {
+  width: 100%; min-height: 40vh; max-height: 320px; min-height: 180px; font-size: 1.75rem; flex-direction: column;
+  background: var(--accent); color: var(--accent-fg); border-color: var(--accent);
+}
+.talk:hover { background: var(--accent); filter: brightness(1.08); }
+.talk svg { width: 64px; height: 64px; flex: none; }
+.talk[aria-pressed="true"] { background: var(--alert); border-color: var(--alert); color: #fff; }
+@media (prefers-reduced-motion: no-preference) {
+  .talk[aria-pressed="true"] { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(166,58,10,0.45); } 50% { box-shadow: 0 0 0 14px rgba(166,58,10,0); } }
+}
+.status { min-height: 1.6em; color: var(--muted); }
+.answer { background: var(--surface); border: 2px solid var(--line); border-radius: 4px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.answer[hidden], [hidden] { display: none !important; }
+.answer .q { color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.answer .a { font-size: 1.25rem; line-height: 1.55; white-space: pre-wrap; }
+.answer.off { border-color: var(--alert); background: var(--alert-soft); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vm { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.vm:hover { background: var(--accent); filter: brightness(1.08); }
+.vm-hint { font-size: 0.9rem; color: var(--muted); margin-top: 8px; }
+.vm-hint b { font-family: var(--font-data); color: var(--fg); overflow-wrap: anywhere; }
+details { border-top: 1px solid var(--line); padding-top: 14px; }
+summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.ask-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+input[type="text"] {
+  flex: 1 1 14rem; min-width: 0; font: inherit; color: var(--fg); background: var(--surface);
+  border: 2px solid var(--line); border-radius: 4px; padding: 12px 14px; min-height: 52px; width: 100%;
+}
+input[type="text"]:focus-visible { border-color: var(--accent); }
+.field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.field label { font-size: 0.9rem; color: var(--muted); }
+.note { font-size: 0.9rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <h1>Pregunta sobre tu medicamento</h1>
+    <div class="label">
+      <span class="k">Medicamento de esta etiqueta</span>
+      <span class="v" id="medName">Paracetamol</span>
+    </div>
+  </header>
+
+  <section>
+    <button type="button" class="talk" id="talk" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+      <span id="talkLabel">Pulsa y habla</span>
+    </button>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="answer" class="answer" hidden tabindex="-1" aria-live="polite">
+    <p class="q" id="aq"></p>
+    <p class="a" id="aa"></p>
+    <div class="actions">
+      <button type="button" id="replay">Escuchar otra vez</button>
+      <button type="button" id="stop">Parar la voz</button>
+    </div>
+    <div id="vmBox" hidden>
+      <a class="btn vm" href="https://www.vademecum.es/" target="_blank" rel="noopener">Ver ficha en Vademecum</a>
+      <p class="vm-hint">Busca allí: <b id="vmTerm"></b></p>
+    </div>
+  </section>
+
+  <details>
+    <summary>Escribir la pregunta o cambiar de medicamento</summary>
+    <form class="ask-row" id="form">
+      <label for="q" class="sr">Tu pregunta sobre el medicamento</label>
+      <input type="text" id="q" autocomplete="off" placeholder="Por ejemplo: ¿para qué sirve?">
+      <button type="submit" id="send">Preguntar</button>
+    </form>
+    <div class="field">
+      <label for="med">Nombre del medicamento</label>
+      <input type="text" id="med" value="Paracetamol" autocomplete="off">
+    </div>
+  </details>
+
+  <p class="note">Esta información es orientativa y la genera una IA, que puede equivocarse. No sustituye al prospecto, al farmacéutico ni al médico. Si tienes una urgencia, llama al 112.</p>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var med = "Paracetamol";
+  var lastText = "";
+  var listening = false;
+  var busy = false;
+  var recog = null;
+  var audioTimer = null;
+  var maxTimer = null;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // La etiqueta NaviLens abre la página con el medicamento en la dirección: ...#ibuprofeno
+  function fromHash() {
+    try {
+      var h = decodeURIComponent(location.hash.slice(1)).replace(/-/g, " ").trim();
+      if (h) return h.charAt(0).toUpperCase() + h.slice(1);
+    } catch (e) {}
+    return "Paracetamol";
+  }
+  function setMed(name) {
+    med = (name || "").trim() || "Paracetamol";
+    $("medName").textContent = med;
+    $("med").value = med;
+  }
+  function setStatus(t) { $("status").textContent = t; }
+
+  function speak(text) {
+    if (!("speechSynthesis" in window) || !text) return;
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "es-ES"; u.rate = 0.95;
+    var vs = speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); });
+    var v = vs.find(function (x) { return /es[-_]ES/i.test(x.lang); }) || vs[0];
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  }
+
+  function stopListening() {
+    clearTimeout(audioTimer); clearTimeout(maxTimer);
+    listening = false;
+    $("talk").setAttribute("aria-pressed", "false");
+    $("talkLabel").textContent = "Pulsa y habla";
+  }
+
+  function startListening() {
+    if (!SR) {
+      setStatus("Este navegador no reconoce la voz. Usa Chrome, Edge o Safari, o escribe la pregunta.");
+      return;
+    }
+    try {
+      recog = new SR();
+      recog.lang = "es-ES"; recog.interimResults = false; recog.maxAlternatives = 1;
+      recog.onaudiostart = function () { clearTimeout(audioTimer); setStatus("Escuchando… habla ahora."); };
+      recog.onresult = function (e) { ask(e.results[0][0].transcript); };
+      recog.onerror = function (e) {
+        stopListening();
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          setStatus("Debes permitir el micrófono en el navegador y volver a pulsar.");
+        } else if (e.error === "no-speech") {
+          setStatus("No he oído nada. Pulsa otra vez y habla.");
+        } else {
+          setStatus("No he podido escucharte. Pulsa otra vez.");
+        }
+      };
+      recog.onend = function () {
+        stopListening();
+        if (/^Escuchando/.test($("status").textContent)) setStatus("No he oído nada. Pulsa otra vez y habla.");
+      };
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
+      recog.start();
+      listening = true;
+      $("talk").setAttribute("aria-pressed", "true");
+      $("talkLabel").textContent = "Te escucho. Pulsa para parar";
+      setStatus("Escuchando…");
+      audioTimer = setTimeout(function () {
+        try { recog.abort(); } catch (e) {}
+        stopListening();
+        setStatus("El micrófono no responde. Revisa el permiso del navegador.");
+      }, 5000);
+      maxTimer = setTimeout(function () { try { recog.stop(); } catch (e) {} }, 12000);
+    } catch (err) {
+      stopListening();
+      setStatus("No he podido activar el micrófono.");
+    }
+  }
+
+  async function ask(q) {
+    q = (q || "").trim();
+    if (!q || busy) return;
+    busy = true; $("send").disabled = true;
+    setStatus("Pensando la respuesta…");
+    try {
+      var res = await fetch("/api/preguntar", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pregunta: q, medicamento: med })
+      });
+      if (!res.ok) throw new Error("http " + res.status);
+      show(q, await res.json());
+      setStatus("");
+    } catch (err) {
+      setStatus("No he podido responder ahora. Prueba otra vez en unos segundos.");
+      speak("No he podido responder ahora. Prueba otra vez.");
+    } finally {
+      busy = false; $("send").disabled = false;
+    }
+  }
+
+  function show(q, r) {
+    var related = r.relacionada !== false;
+    var text = String(r.respuesta || "No he podido preparar una respuesta. Consulta el prospecto o pregunta a tu farmacéutico.").trim();
+    var term = String(r.buscar_vademecum || "").trim();
+    lastText = text;
+    $("aq").textContent = "Pregunta: " + q;
+    $("aa").textContent = text;
+    $("answer").classList.toggle("off", !related);
+    $("answer").hidden = false;
+    if (related && term) { $("vmTerm").textContent = term; $("vmBox").hidden = false; }
+    else { $("vmBox").hidden = true; }
+    speak(text);
+  }
+
+  $("talk").addEventListener("click", function () {
+    if (listening) { try { recog.stop(); } catch (e) {} stopListening(); }
+    else startListening();
+  });
+  $("form").addEventListener("submit", function (e) { e.preventDefault(); ask($("q").value); });
+  $("replay").addEventListener("click", function () { speak(lastText); });
+  $("stop").addEventListener("click", function () { if ("speechSynthesis" in window) speechSynthesis.cancel(); });
+  $("med").addEventListener("change", function () { setMed($("med").value); });
+  window.addEventListener("hashchange", function () { setMed(fromHash()); });
+  setMed(fromHash());
+})();
+</script>
+</body>
+</html>
