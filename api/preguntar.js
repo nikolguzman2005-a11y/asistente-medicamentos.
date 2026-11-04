@@ -26,7 +26,7 @@ function construirPrompt(medicamento, pregunta) {
 }
 
 async function conGemini(prompt, key) {
-  const modelo = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelo = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   const r = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent",
     {
