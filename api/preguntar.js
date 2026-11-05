@@ -36,8 +36,7 @@ async function conGemini(prompt, key) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          maxOutputTokens: 600,
-          thinkingConfig: { thinkingBudget: 0 }
+          maxOutputTokens: 1200
         }
       })
     }
