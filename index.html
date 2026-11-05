@@ -223,10 +223,13 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
     if (!q || busy) return;
     busy = true; $("send").disabled = true;
     setStatus("Pensando la respuesta…");
+    var control = new AbortController();
+    var reloj = setTimeout(function () { control.abort(); }, 28000);
     try {
       var res = await fetch("/api/preguntar", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: control.signal,
         body: JSON.stringify({ pregunta: q, medicamento: med })
       });
       if (!res.ok) throw new Error("http " + res.status);
@@ -236,6 +239,7 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
       setStatus("No he podido responder ahora. Prueba otra vez en unos segundos.");
       speak("No he podido responder ahora. Prueba otra vez.");
     } finally {
+      clearTimeout(reloj);
       busy = false; $("send").disabled = false;
     }
   }
