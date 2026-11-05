@@ -25,22 +25,39 @@ function construirPrompt(medicamento, pregunta) {
   ].join("\n");
 }
 
+const esperar = function (ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); };
+
+// Llama a Gemini y reintenta si Google está saturado (503, 429 o 500).
+async function pedirGemini(modelo, prompt, key) {
+  let r;
+  for (let intento = 0; intento < 4; intento++) {
+    r = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 1200
+          }
+        })
+      }
+    );
+    if (r.status !== 503 && r.status !== 429 && r.status !== 500) return r;
+    await esperar(800 * (intento + 1));
+  }
+  return r;
+}
+
 async function conGemini(prompt, key) {
   const modelo = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-  const r = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent",
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          maxOutputTokens: 1200
-        }
-      })
-    }
-  );
+  const alternativo = (process.env.GEMINI_MODEL_RESPALDO || "").trim();
+  let r = await pedirGemini(modelo, prompt, key);
+  if (!r.ok && alternativo && alternativo !== modelo) {
+    r = await pedirGemini(alternativo, prompt, key);
+  }
   if (!r.ok) {
     const detalle = (await r.text()).slice(0, 400);
     throw new Error("Gemini respondió " + r.status + ": " + detalle);
