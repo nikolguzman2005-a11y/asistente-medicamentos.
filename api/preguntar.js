@@ -30,23 +30,34 @@ const esperar = function (ms) { return new Promise(function (ok) { setTimeout(ok
 // Llama a Gemini y reintenta si Google está saturado (503, 429 o 500).
 async function pedirGemini(modelo, prompt, key) {
   let r;
-  for (let intento = 0; intento < 4; intento++) {
-    r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            maxOutputTokens: 1200
-          }
-        })
-      }
-    );
+  for (let intento = 0; intento < 2; intento++) {
+    const control = new AbortController();
+    const reloj = setTimeout(function () { control.abort(); }, 9000);
+    try {
+      r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + modelo + ":generateContent",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          signal: control.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              maxOutputTokens: 800
+            }
+          })
+        }
+      );
+    } catch (e) {
+      clearTimeout(reloj);
+      if (intento === 1) throw new Error("Google no responde (tiempo de espera agotado). Prueba otra vez en un momento.");
+      await esperar(500);
+      continue;
+    }
+    clearTimeout(reloj);
     if (r.status !== 503 && r.status !== 429 && r.status !== 500) return r;
-    await esperar(800 * (intento + 1));
+    await esperar(800);
   }
   return r;
 }
