@@ -223,6 +223,7 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
     if (!q || busy) return;
     busy = true; $("send").disabled = true;
     setStatus("Pensando la respuesta…");
+    speak("Un momento, estoy buscando la respuesta.");
     var control = new AbortController();
     var reloj = setTimeout(function () { control.abort(); }, 28000);
     try {
