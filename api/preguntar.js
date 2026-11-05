@@ -28,9 +28,10 @@ function construirPrompt(medicamento, pregunta) {
 const esperar = function (ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); };
 
 // Llama a Gemini y reintenta si Google está saturado (503, 429 o 500).
-async function pedirGemini(modelo, prompt, key) {
+async function pedirGemini(modelo, prompt, key, intentos) {
   let r;
-  for (let intento = 0; intento < 2; intento++) {
+  intentos = intentos || 2;
+  for (let intento = 0; intento < intentos; intento++) {
     const control = new AbortController();
     const reloj = setTimeout(function () { control.abort(); }, 9000);
     try {
@@ -51,7 +52,7 @@ async function pedirGemini(modelo, prompt, key) {
       );
     } catch (e) {
       clearTimeout(reloj);
-      if (intento === 1) throw new Error("Google no responde (tiempo de espera agotado). Prueba otra vez en un momento.");
+      if (intento === intentos - 1) throw new Error("Google no responde (tiempo de espera agotado). Prueba otra vez en un momento.");
       await esperar(500);
       continue;
     }
@@ -62,16 +63,42 @@ async function pedirGemini(modelo, prompt, key) {
   return r;
 }
 
+// Pregunta a Google qué modelos "flash" puede usar esta clave (así no hay que adivinar nombres).
+async function modelosDisponibles(key) {
+  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+    headers: { "x-goog-api-key": key }
+  });
+  if (!r.ok) return [];
+  const data = await r.json();
+  return (data.models || [])
+    .filter(function (m) { return (m.supportedGenerationMethods || []).indexOf("generateContent") !== -1; })
+    .map(function (m) { return String(m.name || "").replace(/^models\//, ""); })
+    .filter(function (n) { return /flash/i.test(n) && !/(image|tts|audio|live|embed|robotics|thinking)/i.test(n); });
+}
+
 async function conGemini(prompt, key) {
   const modelo = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   const alternativo = (process.env.GEMINI_MODEL_RESPALDO || "").trim();
-  let r = await pedirGemini(modelo, prompt, key);
+  const probados = [modelo];
+  let r = await pedirGemini(modelo, prompt, key, 2);
   if (!r.ok && alternativo && alternativo !== modelo) {
-    r = await pedirGemini(alternativo, prompt, key);
+    probados.push(alternativo);
+    r = await pedirGemini(alternativo, prompt, key, 1);
+  }
+  if (!r.ok) {
+    // Último recurso: probar hasta 3 modelos flash que tenga la cuenta
+    let lista = [];
+    try { lista = await modelosDisponibles(key); } catch (e) { lista = []; }
+    lista = lista.filter(function (n) { return probados.indexOf(n) === -1; }).slice(0, 3);
+    for (const n of lista) {
+      probados.push(n);
+      try { r = await pedirGemini(n, prompt, key, 1); } catch (e) { continue; }
+      if (r.ok) break;
+    }
   }
   if (!r.ok) {
     const detalle = (await r.text()).slice(0, 400);
-    throw new Error("Gemini respondió " + r.status + ": " + detalle);
+    throw new Error("Gemini respondió " + r.status + " (modelos probados: " + probados.join(", ") + "): " + detalle);
   }
   const data = await r.json();
   const partes = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
