@@ -100,6 +100,7 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
       <span id="talkLabel">Pulsa y habla</span>
     </button>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+    <p class="vm-hint">Después de cada respuesta puedes decir: <b>repetir</b>, <b>otra pregunta</b>, <b>vademecum</b> o <b>parar</b>.</p>
   </section>
 
   <section id="answer" class="answer" hidden tabindex="-1" aria-live="polite">
@@ -136,11 +137,14 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
   var $ = function (id) { return document.getElementById(id); };
   var med = "Paracetamol";
   var lastText = "";
+  var lastTerm = "";
   var listening = false;
   var busy = false;
   var recog = null;
   var audioTimer = null;
   var maxTimer = null;
+  var speakId = 0;
+  var pollTimer = null;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   // La etiqueta NaviLens abre la página con el medicamento en la dirección: ...#ibuprofeno
@@ -158,17 +162,41 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
   }
   function setStatus(t) { $("status").textContent = t; }
 
-  function speak(text) {
-    if (!("speechSynthesis" in window) || !text) return;
-    speechSynthesis.cancel();
+  /* ---------- Voz de salida ---------- */
+  function cancelSpeech() {
+    speakId++;
+    clearInterval(pollTimer);
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+  }
+  // speak(texto, alTerminar): alTerminar se ejecuta cuando acaba de hablar (si no se ha cortado antes)
+  function speak(text, done) {
+    if (!("speechSynthesis" in window) || !text) { if (done) setTimeout(done, 0); return; }
+    cancelSpeech();
+    var id = speakId, fired = false;
+    var fin = function () {
+      if (fired || id !== speakId) return;
+      fired = true; clearInterval(pollTimer);
+      if (done) done();
+    };
     var u = new SpeechSynthesisUtterance(text);
     u.lang = "es-ES"; u.rate = 0.95;
     var vs = speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); });
     var v = vs.find(function (x) { return /es[-_]ES/i.test(x.lang); }) || vs[0];
     if (v) u.voice = v;
+    u.onend = fin; u.onerror = fin;
     speechSynthesis.speak(u);
+    if (done) {
+      // Algunos móviles no avisan al terminar: se comprueba cada poco
+      setTimeout(function () {
+        if (id !== speakId || fired) return;
+        pollTimer = setInterval(function () {
+          if (!speechSynthesis.speaking && !speechSynthesis.pending) fin();
+        }, 400);
+      }, 800);
+    }
   }
 
+  /* ---------- Voz de entrada ---------- */
   function stopListening() {
     clearTimeout(audioTimer); clearTimeout(maxTimer);
     listening = false;
@@ -176,37 +204,44 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
     $("talkLabel").textContent = "Pulsa y habla";
   }
 
-  function startListening() {
+  // Escucha una frase. onText recibe lo dicho; onSilencio se llama si no se oye nada.
+  function listen(onText, onSilencio) {
     if (!SR) {
       setStatus("Este navegador no reconoce la voz. Usa Chrome, Edge o Safari, o escribe la pregunta.");
       return;
     }
+    cancelSpeech();
+    try { if (recog) recog.abort(); } catch (e) {}
+    stopListening();
+    var got = false, handled = false;
+    var silencio = onSilencio || function () { setStatus("No he oído nada. Pulsa otra vez y habla."); };
     try {
       recog = new SR();
       recog.lang = "es-ES"; recog.interimResults = false; recog.maxAlternatives = 1;
       recog.onaudiostart = function () { clearTimeout(audioTimer); setStatus("Escuchando… habla ahora."); };
-      recog.onresult = function (e) { ask(e.results[0][0].transcript); };
+      recog.onresult = function (e) { got = true; var t = e.results[0][0].transcript; stopListening(); onText(t); };
       recog.onerror = function (e) {
-        stopListening();
+        if (handled || got) return;
+        handled = true; stopListening();
         if (e.error === "not-allowed" || e.error === "service-not-allowed") {
           setStatus("Debes permitir el micrófono en el navegador y volver a pulsar.");
         } else if (e.error === "no-speech") {
-          setStatus("No he oído nada. Pulsa otra vez y habla.");
+          silencio();
         } else {
           setStatus("No he podido escucharte. Pulsa otra vez.");
         }
       };
       recog.onend = function () {
-        stopListening();
-        if (/^Escuchando/.test($("status").textContent)) setStatus("No he oído nada. Pulsa otra vez y habla.");
+        if (!got && !handled) { handled = true; stopListening(); silencio(); }
+        else stopListening();
       };
-      if ("speechSynthesis" in window) speechSynthesis.cancel();
       recog.start();
       listening = true;
       $("talk").setAttribute("aria-pressed", "true");
       $("talkLabel").textContent = "Te escucho. Pulsa para parar";
       setStatus("Escuchando…");
       audioTimer = setTimeout(function () {
+        handled = true;
         try { recog.abort(); } catch (e) {}
         stopListening();
         setStatus("El micrófono no responde. Revisa el permiso del navegador.");
@@ -218,54 +253,106 @@ input[type="text"]:focus-visible { border-color: var(--accent); }
     }
   }
 
-  async function ask(q) {
+  /* ---------- Órdenes por voz ---------- */
+  function norm(t) {
+    return String(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function orden(t) {
+    if (!lastText) return null;
+    var n = norm(t);
+    if (n.split(" ").length > 6) return null; // una frase larga es una pregunta nueva
+    if (/\b(repet\w*|otra vez|de nuevo|escuchar)\b/.test(n)) return "repetir";
+    if (/\b(parar|para ya|basta|silencio|termin\w*|adios|gracias|salir|nada mas)\b/.test(n)) return "parar";
+    if (/\b(otra pregunta|nueva pregunta|preguntar otra)\b/.test(n)) return "otra";
+    if (/\b(vademecum|vademecun|ficha)\b/.test(n)) return "ficha";
+    return null;
+  }
+  function sinRespuesta() {
+    setStatus("Pulsa el botón cuando quieras preguntar.");
+    speak("No te he oído. Pulsa el botón cuando quieras preguntar.");
+  }
+  function escucharOrden() {
+    setTimeout(function () { listen(procesarVoz, sinRespuesta); }, 400);
+  }
+  function menuVoz() {
+    speak("¿Repetir, otra pregunta o parar?", escucharOrden);
+  }
+  function procesarVoz(t) {
+    var o = orden(t);
+    if (o === "repetir") speak(lastText, menuVoz);
+    else if (o === "parar") speak("De acuerdo. Pulsa el botón cuando quieras preguntar otra vez.");
+    else if (o === "otra") speak("Dime tu pregunta.", escucharOrden);
+    else if (o === "ficha") {
+      speak("Para ver la ficha completa, abre vademecum punto es y busca " + (lastTerm || med) + ". También tienes el botón Ver ficha en Vademecum en la pantalla.", menuVoz);
+    } else ask(t, true);
+  }
+
+  /* ---------- Pregunta a la IA ---------- */
+  async function ask(q, porVoz) {
     q = (q || "").trim();
     if (!q || busy) return;
     busy = true; $("send").disabled = true;
     setStatus("Pensando la respuesta…");
     speak("Un momento, estoy buscando la respuesta.");
-    var control = new AbortController();
-    var reloj = setTimeout(function () { control.abort(); }, 28000);
-    try {
-      var res = await fetch("/api/preguntar", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        signal: control.signal,
-        body: JSON.stringify({ pregunta: q, medicamento: med })
-      });
-      if (!res.ok) throw new Error("http " + res.status);
-      show(q, await res.json());
-      setStatus("");
-    } catch (err) {
-      setStatus("No he podido responder ahora. Prueba otra vez en unos segundos.");
-      speak("No he podido responder ahora. Prueba otra vez.");
-    } finally {
-      clearTimeout(reloj);
-      busy = false; $("send").disabled = false;
+    var MAX_INTENTOS = 3;
+    var ok = false;
+    for (var intento = 1; intento <= MAX_INTENTOS && !ok; intento++) {
+      var control = new AbortController();
+      var reloj = setTimeout(function () { control.abort(); }, 25000);
+      try {
+        var res = await fetch("/api/preguntar", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          signal: control.signal,
+          body: JSON.stringify({ pregunta: q, medicamento: med })
+        });
+        if (!res.ok) throw new Error("http " + res.status);
+        var datos = await res.json();
+        if (!datos || !datos.respuesta) throw new Error("sin respuesta");
+        clearTimeout(reloj);
+        show(q, datos, porVoz);
+        setStatus("");
+        ok = true;
+      } catch (err) {
+        clearTimeout(reloj);
+        if (intento < MAX_INTENTOS) {
+          setStatus("Sigo buscando la respuesta…");
+          speak("Sigo buscando la respuesta.");
+          await new Promise(function (r) { setTimeout(r, 1200); });
+        }
+      }
     }
+    if (!ok) {
+      setStatus("No he podido responder ahora. Prueba otra vez en unos segundos.");
+      speak("No he podido responder ahora. Pulsa el botón e inténtalo otra vez.");
+    }
+    busy = false; $("send").disabled = false;
   }
 
-  function show(q, r) {
+  function show(q, r, porVoz) {
     var related = r.relacionada !== false;
     var text = String(r.respuesta || "No he podido preparar una respuesta. Consulta el prospecto o pregunta a tu farmacéutico.").trim();
     var term = String(r.buscar_vademecum || "").trim();
-    lastText = text;
+    lastText = text; lastTerm = related ? term : "";
     $("aq").textContent = "Pregunta: " + q;
     $("aa").textContent = text;
     $("answer").classList.toggle("off", !related);
     $("answer").hidden = false;
     if (related && term) { $("vmTerm").textContent = term; $("vmBox").hidden = false; }
     else { $("vmBox").hidden = true; }
-    speak(text);
+    // Si la pregunta fue por voz, al terminar la respuesta se ofrecen las órdenes por voz
+    speak(text, porVoz ? menuVoz : null);
   }
 
+  /* ---------- Botones ---------- */
   $("talk").addEventListener("click", function () {
-    if (listening) { try { recog.stop(); } catch (e) {} stopListening(); }
-    else startListening();
+    if (listening) { try { recog.abort(); } catch (e) {} stopListening(); setStatus(""); }
+    else listen(procesarVoz);
   });
-  $("form").addEventListener("submit", function (e) { e.preventDefault(); ask($("q").value); });
+  $("form").addEventListener("submit", function (e) { e.preventDefault(); ask($("q").value, false); });
   $("replay").addEventListener("click", function () { speak(lastText); });
-  $("stop").addEventListener("click", function () { if ("speechSynthesis" in window) speechSynthesis.cancel(); });
+  $("stop").addEventListener("click", function () { cancelSpeech(); });
   $("med").addEventListener("change", function () { setMed($("med").value); });
   window.addEventListener("hashchange", function () { setMed(fromHash()); });
   setMed(fromHash());
