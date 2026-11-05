@@ -17,7 +17,7 @@ function construirPrompt(medicamento, pregunta) {
     "2. Si es sobre medicamentos, explica con la información habitual de su prospecto: para qué sirve, cómo se toma de forma general, contraindicaciones, efectos adversos, interacciones, conservación.",
     "3. Nunca pautes una dosis personalizada ni diagnostiques. En dudas de dosis para una persona concreta, niños, embarazo, lactancia, enfermedades previas o síntomas que preocupan, indica que lo consulte con su farmacéutico o su médico. Si parece una urgencia o una sobredosis, indica llamar al 112.",
     "4. Si no estás seguro de un dato, dilo y remite al prospecto o al farmacéutico. No inventes.",
-    "5. Habla en español sencillo, con frases cortas, en un máximo de 90 palabras, sin listas, sin símbolos, sin abreviaturas y sin markdown, porque se leerá en voz alta.",
+    "5. Habla en español sencillo, con frases cortas, en un máximo de 50 palabras y con lo más importante primero, sin listas, sin símbolos, sin abreviaturas y sin markdown, porque se leerá en voz alta.",
     "6. En buscar_vademecum pon el nombre del medicamento por el que se pregunta (principio activo o marca), sin más texto. Si no hay medicamento, déjalo vacío.",
     "",
     "Devuelve solo un objeto JSON con esta forma exacta:",
@@ -45,7 +45,7 @@ async function pedirGemini(modelo, prompt, key, intentos) {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               responseMimeType: "application/json",
-              maxOutputTokens: 800
+              maxOutputTokens: 500
             }
           })
         }
