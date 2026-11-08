@@ -3,134 +3,224 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Asistente de medicamentos</title>
+<title>Oco, asistente de medicamentos</title>
+<meta name="description" content="Pregunta por voz sobre tu medicamento y escucha la respuesta.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <style>
+/* Paleta: índigo y violeta sobre fondo cálido; coral para "escuchando" */
 :root {
   color-scheme: light;
-  --bg: #f4f6f3; --surface: #ffffff; --fg: #13211c; --muted: #4d5f58; --line: #cdd8d2;
-  --accent: #0b6a4d; --accent-fg: #ffffff; --accent-soft: #dcefe6; --alert: #a63a0a; --alert-soft: #fbe6da;
-  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  --font-data: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bg: #faf8ff;
+  --surface: #ffffff;
+  --ink: #1b1740;
+  --muted: #5a5680;
+  --line: #e4e0f5;
+  --accent: #4338ca;
+  --accent-2: #7c3aed;
+  --accent-ink: #ffffff;
+  --accent-soft: #eeebff;
+  --alert: #d9480f;
+  --alert-soft: #fff0e8;
+  --grad: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
+  --shadow: 0 1px 2px rgba(40, 30, 120, 0.06), 0 16px 40px rgba(67, 56, 202, 0.10);
+  --ring: 0 0 0 14px rgba(124, 58, 237, 0.10);
+  --glow1: rgba(124, 58, 237, 0.16);
+  --glow2: rgba(251, 146, 60, 0.16);
+  --font: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #0e1613; --surface: #17231e; --fg: #eaf2ee; --muted: #a3b5ad; --line: #2c3e36;
-    --accent: #4fc79b; --accent-fg: #06251a; --accent-soft: #1b3a2f; --alert: #ff9b6b; --alert-soft: #3b2214;
+    --bg: #0f0d24;
+    --surface: #1a1738;
+    --ink: #f1eeff;
+    --muted: #b0aad6;
+    --line: #2e2a5a;
+    --accent: #a5a0ff;
+    --accent-2: #c4a1ff;
+    --accent-ink: #14113a;
+    --accent-soft: #28235a;
+    --alert: #ff9a66;
+    --alert-soft: #3a2218;
+    --grad: linear-gradient(135deg, #8b85ff 0%, #b78bff 100%);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.4);
+    --ring: 0 0 0 14px rgba(165, 160, 255, 0.12);
+    --glow1: rgba(124, 58, 237, 0.30);
+    --glow2: rgba(251, 146, 60, 0.10);
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  background: var(--bg); color: var(--fg);
-  font-family: var(--font-body); font-size: 18px; line-height: 1.5;
-  padding-block: 24px 48px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background:
+    radial-gradient(60rem 28rem at 85% -8%, var(--glow1), transparent 70%),
+    radial-gradient(44rem 26rem at -10% 4%, var(--glow2), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 18px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-main { max-width: 40rem; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; text-wrap: balance; }
 p { margin: 0; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.label {
-  background: var(--surface); border: 2px solid var(--fg); border-radius: 4px; padding: 12px 16px;
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px;
-}
-.label .k { font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.label .v { font-size: 1.5rem; font-weight: 700; overflow-wrap: anywhere; }
-button, .btn {
-  font: inherit; font-weight: 700; cursor: pointer; border-radius: 4px; min-height: 52px; padding: 10px 18px;
-  border: 2px solid var(--fg); background: var(--surface); color: var(--fg);
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none;
-}
-button:hover, .btn:hover { background: var(--accent-soft); }
-button[disabled] { opacity: 0.55; cursor: not-allowed; }
-.talk {
-  width: 100%; min-height: 40vh; max-height: 320px; min-height: 180px; font-size: 1.75rem; flex-direction: column;
-  background: var(--accent); color: var(--accent-fg); border-color: var(--accent);
-}
-.talk:hover { background: var(--accent); filter: brightness(1.08); }
-.talk svg { width: 64px; height: 64px; flex: none; }
-.talk[aria-pressed="true"] { background: var(--alert); border-color: var(--alert); color: #fff; }
-@media (prefers-reduced-motion: no-preference) {
-  .talk[aria-pressed="true"] { animation: pulse 1.4s ease-in-out infinite; }
-  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(166,58,10,0.45); } 50% { box-shadow: 0 0 0 14px rgba(166,58,10,0); } }
-}
-.status { min-height: 1.6em; color: var(--muted); }
-.answer { background: var(--surface); border: 2px solid var(--line); border-radius: 4px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
-.answer[hidden], [hidden] { display: none !important; }
-.answer .q { color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
-.answer .a { font-size: 1.25rem; line-height: 1.55; white-space: pre-wrap; }
-.answer.off { border-color: var(--alert); background: var(--alert-soft); }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.vm { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-.vm:hover { background: var(--accent); filter: brightness(1.08); }
-.vm-hint { font-size: 0.9rem; color: var(--muted); margin-top: 8px; }
-.vm-hint b { font-family: var(--font-data); color: var(--fg); overflow-wrap: anywhere; }
-details { border-top: 1px solid var(--line); padding-top: 14px; }
-summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
-.ask-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-input[type="text"] {
-  flex: 1 1 14rem; min-width: 0; font: inherit; color: var(--fg); background: var(--surface);
-  border: 2px solid var(--line); border-radius: 4px; padding: 12px 14px; min-height: 52px; width: 100%;
-}
-input[type="text"]:focus-visible { border-color: var(--accent); }
-.field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.field label { font-size: 0.9rem; color: var(--muted); }
-.note { font-size: 0.9rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+
+.page { max-width: 38rem; margin: 0 auto; padding-block: 20px 56px; display: flex; flex-direction: column; gap: 36px; }
+
+/* Cabecera */
+.top { display: flex; align-items: center; gap: 12px; }
+.mark { width: 42px; height: 42px; border-radius: 14px; background: var(--grad); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+.mark svg { width: 22px; height: 22px; }
+.brand { font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+.brand small { display: block; font-weight: 400; font-size: 0.85rem; color: var(--muted); }
+
+/* Portada */
+.hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+h1 { margin: 0; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--ink); padding-bottom: 0.08em; font-size: clamp(1.9rem, 6.2vw, 2.5rem); line-height: 1.12; letter-spacing: -0.015em; text-wrap: balance; }
+.med {
+  display: inline-flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 18px; box-shadow: var(--shadow);
+}
+.med .k { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.med .v { font-weight: 700; overflow-wrap: anywhere; }
+
+/* Botón de micrófono */
+.voice { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 8px; }
+.talk {
+  width: 168px; height: 168px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--grad); color: var(--accent-ink);
+  display: grid; place-items: center;
+  box-shadow: var(--ring), 0 20px 40px rgba(67, 56, 202, 0.32);
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+.talk:hover { transform: scale(1.02); }
+.talk:active { transform: scale(0.98); }
+.talk svg { width: 68px; height: 68px; }
+.talk[aria-pressed="true"] { background: linear-gradient(135deg, #d9480f, #f0783c); color: #fff; box-shadow: 0 0 0 12px rgba(217, 72, 15, 0.16), 0 18px 36px rgba(217, 72, 15, 0.3); }
+@media (prefers-reduced-motion: no-preference) {
+  .talk[aria-pressed="true"] { animation: latido 1.5s ease-in-out infinite; }
+  @keyframes latido {
+    0%, 100% { box-shadow: 0 0 0 10px rgba(217, 72, 15, 0.16), 0 18px 36px rgba(217, 72, 15, 0.3); }
+    50% { box-shadow: 0 0 0 22px rgba(217, 72, 15, 0.05), 0 18px 36px rgba(217, 72, 15, 0.3); }
+  }
+}
+.talk-label { font-size: 1.35rem; font-weight: 700; }
+.status { min-height: 1.6em; color: var(--muted); text-align: center; }
+
+.commands { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--muted); font-size: 0.95rem; text-align: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 14px; font-weight: 700; font-size: 0.95rem; }
+
+/* Respuesta */
+.answer { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--accent-2); border-radius: 24px; padding: 26px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 18px; }
+.answer .q { color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.answer .a { font-size: 1.3rem; line-height: 1.6; white-space: pre-wrap; }
+.answer.off { background: var(--alert-soft); border-color: transparent; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.btn, button.btn {
+  font: inherit; font-weight: 700; cursor: pointer; text-decoration: none;
+  min-height: 52px; padding: 10px 22px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1.5px solid var(--line); background: transparent; color: var(--ink);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+.btn.primary { background: var(--grad); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+.vm-hint { margin-top: 10px; font-size: 0.92rem; color: var(--muted); }
+.vm-hint b { font-family: var(--mono); font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+
+/* Escribir */
+.more { border-top: 1px solid var(--line); padding-top: 8px; }
+.more summary { cursor: pointer; list-style: none; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 700; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after { content: ""; width: 10px; height: 10px; border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: rotate(45deg); transition: transform 0.2s ease; margin-right: 4px; flex: none; }
+.more[open] summary::after { transform: rotate(-135deg); }
+.form { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 0.92rem; color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+input[type="text"] {
+  flex: 1 1 14rem; min-width: 0; width: 100%; font: inherit; color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 16px; min-height: 52px;
+}
+input[type="text"]:focus-visible { border-color: var(--accent); outline-offset: 2px; }
+
+.note { font-size: 0.88rem; color: var(--muted); text-align: center; max-width: 32rem; margin: 0 auto; }
 </style>
 </head>
 <body>
-<main>
-  <header style="display:flex;flex-direction:column;gap:12px">
-    <h1>Pregunta sobre tu medicamento</h1>
-    <div class="label">
-      <span class="k">Medicamento de esta etiqueta</span>
-      <span class="v" id="medName">Paracetamol</span>
-    </div>
+<div class="page">
+  <header class="top">
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a4.95 4.95 0 0 1 7-7l7 7a4.95 4.95 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+    </span>
+    <p class="brand">Oco<small>Etiqueta accesible</small></p>
   </header>
 
-  <section>
-    <button type="button" class="talk" id="talk" aria-pressed="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
-      <span id="talkLabel">Pulsa y habla</span>
-    </button>
-    <p class="status" id="status" role="status" aria-live="polite"></p>
-    <p class="vm-hint">Después de cada respuesta puedes decir: <b>repetir</b>, <b>otra pregunta</b>, <b>vademecum</b> o <b>parar</b>.</p>
-  </section>
+  <main style="display:flex;flex-direction:column;gap:36px">
+    <section class="hero">
+      <h1>Pregunta sobre tu medicamento</h1>
+      <p class="med"><span class="k">Medicamento de esta etiqueta</span><span class="v" id="medName">Paracetamol</span></p>
+    </section>
 
-  <section id="answer" class="answer" hidden tabindex="-1" aria-live="polite">
-    <p class="q" id="aq"></p>
-    <p class="a" id="aa"></p>
-    <div class="actions">
-      <button type="button" id="replay">Escuchar otra vez</button>
-      <button type="button" id="stop">Parar la voz</button>
-    </div>
-    <div id="vmBox" hidden>
-      <a class="btn vm" href="https://www.vademecum.es/" target="_blank" rel="noopener">Ver ficha en Vademecum</a>
-      <p class="vm-hint">Busca allí: <b id="vmTerm"></b></p>
-    </div>
-  </section>
+    <section class="voice" aria-label="Preguntar con la voz">
+      <button type="button" class="talk" id="talk" aria-pressed="false" aria-labelledby="talkLabel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+      </button>
+      <p class="talk-label" id="talkLabel">Pulsa y habla</p>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <div class="commands">
+        <span>Después de cada respuesta puedes decir</span>
+        <span class="chips"><span class="chip">repetir</span><span class="chip">otra pregunta</span><span class="chip">vademecum</span><span class="chip">parar</span></span>
+      </div>
+    </section>
 
-  <details>
-    <summary>Escribir la pregunta o cambiar de medicamento</summary>
-    <form class="ask-row" id="form">
-      <label for="q" class="sr">Tu pregunta sobre el medicamento</label>
-      <input type="text" id="q" autocomplete="off" placeholder="Por ejemplo: ¿para qué sirve?">
-      <button type="submit" id="send">Preguntar</button>
-    </form>
-    <div class="field">
-      <label for="med">Nombre del medicamento</label>
-      <input type="text" id="med" value="Paracetamol" autocomplete="off">
-    </div>
-  </details>
+    <section id="answer" class="answer" hidden tabindex="-1" aria-live="polite">
+      <p class="q" id="aq"></p>
+      <p class="a" id="aa"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="replay">Escuchar otra vez</button>
+        <button type="button" class="btn" id="stop">Parar la voz</button>
+      </div>
+      <div id="vmBox" hidden>
+        <a class="btn primary" id="vm" href="https://www.vademecum.es/" target="_blank" rel="noopener">Ver ficha en Vademecum</a>
+        <p class="vm-hint">Busca allí: <b id="vmTerm"></b></p>
+      </div>
+    </section>
+
+    <details class="more">
+      <summary>Escribir la pregunta o cambiar de medicamento</summary>
+      <div class="form">
+        <form class="field" id="form">
+          <label for="q">Tu pregunta</label>
+          <div class="row">
+            <input type="text" id="q" autocomplete="off" placeholder="Por ejemplo: ¿para qué sirve?">
+            <button type="submit" class="btn primary" id="send">Preguntar</button>
+          </div>
+        </form>
+        <div class="field">
+          <label for="med">Nombre del medicamento</label>
+          <input type="text" id="med" value="Paracetamol" autocomplete="off">
+        </div>
+      </div>
+    </details>
+  </main>
 
   <p class="note">Esta información es orientativa y la genera una IA, que puede equivocarse. No sustituye al prospecto, al farmacéutico ni al médico. Si tienes una urgencia, llama al 112.</p>
-</main>
+</div>
 
 <script>
 (function () {
